@@ -56,9 +56,9 @@ namespace BanCov2.Controllers.api
 
         [HttpPost]
         [Route("move-chess-node")]
-        public IActionResult chessMove(List<MoveChess> movenodeList)
+        public IActionResult chessMove(List<MoveChess> movenodeList, string roomId)
         {
-            hubContext.Clients.All.SendAsync("ReceiveChessMove", JsonSerializer.Serialize(movenodeList));
+            hubContext.Clients.Groups(roomId).SendAsync("ReceiveChessMove", JsonSerializer.Serialize(movenodeList));
             return Ok(new { status = true, message = "" });
         }
     }

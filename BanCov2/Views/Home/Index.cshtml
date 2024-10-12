@@ -124,13 +124,14 @@
                     }
                 }
 
-
+                let params = new URL(document.location.toString()).searchParams;
+                let roomId = params.get("roomId");
                 var para = [{ id : id, fromi : nodeStart.i, fromj : nodeStart.j, toi : nodeEnd.i, toj : nodeEnd.j }];
                 if (objRemove != null) {
                     para.push(objRemove);
                 }
                 axios({
-                    url: 'api/chess/move-chess-node',
+                    url: 'api/chess/move-chess-node?roomId='+roomId,
                     method: 'Post',
                     responseType: 'Json',
                     data: para
@@ -143,7 +144,9 @@
         },
         mounted: function () {
             this.getChessNode();
-            var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+            let params = new URL(document.location.toString()).searchParams;
+            let roomId = params.get("roomId");
+            var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub?roomId="+roomId).build();
 
             connection.on("ReceiveChessMove", function (message) {
                 console.log(message);
