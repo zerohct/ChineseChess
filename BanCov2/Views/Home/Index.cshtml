@@ -124,6 +124,59 @@
                     }
                 }
 
+
+                // xử lý quân xe Đạt
+                if (id.indexOf('xe') >= 0) { 
+                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+
+                  
+                    if (gapI > 0 && gapJ > 0) {
+                        return;
+                    }
+
+                    if (gapI == 0) { 
+                        if (nodeEnd.j > nodeStart.j) {
+                            for (var j = nodeStart.j + 1; j < nodeEnd.j; j++) {
+                                if (matrix[nodeStart.i][j].id != "") {
+                                    return; 
+                                }
+                            }
+                        } else {
+                            for (var j = nodeStart.j - 1; j > nodeEnd.j; j--) {
+                                if (matrix[nodeStart.i][j].id != "") {
+                                    return; 
+                                }
+                            }
+                        }
+                    } else if (gapJ == 0) { 
+                        if (nodeEnd.i > nodeStart.i) {
+                            for (var i = nodeStart.i + 1; i < nodeEnd.i; i++) {
+                                if (matrix[i][nodeStart.j].id != "") {
+                                    return; 
+                                }
+                            }
+                        } else {
+                            for (var i = nodeStart.i - 1; i > nodeEnd.i; i--) {
+                                if (matrix[i][nodeStart.j].id != "") {
+                                    return; 
+                                }
+                            }
+                        }
+                    }
+
+                  
+                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('do') >= 0) {
+                        return;
+                    }
+
+                    if (nodeEnd.id != "") {
+                        objRemove = { id: nodeEnd.id };
+                    }
+                }
+                // kết thúc xử lý quân xe Đạt
+
+
                 let params = new URL(document.location.toString()).searchParams;
                 let roomId = params.get("roomId");
                 var para = [{ id : id, fromi : nodeStart.i, fromj : nodeStart.j, toi : nodeEnd.i, toj : nodeEnd.j }];
