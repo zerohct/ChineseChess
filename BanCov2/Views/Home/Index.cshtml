@@ -123,6 +123,36 @@
                         }
                     }
                 }
+                // Xử lý cho quân tượng
+                if (id.indexOf('tuong') >= 0) { // Assuming 'tuong' is part of the bishop's id
+                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+
+                    // Kiểm tra xem quân tượng có di chuyển đúng 2 ô chéo không
+                    if (!(gapI === 2 && gapJ === 2)) {
+                        return;
+                    }
+
+                    // Kiểm tra đường đi có bị cản không (đường chéo giữa 2 ô)
+                    var midI = (nodeEnd.i + nodeStart.i) / 2;
+                    var midJ = (nodeEnd.j + nodeStart.j) / 2;
+                    if (matrix[midI][midJ].id != "") {
+                        return;
+                    }
+
+                    // Kiểm tra quân tượng có vượt qua sông không (ví dụ sông ở dòng 5)
+                    if (id.indexOf('den') >= 0 && nodeEnd.i < 5) { // Quân đen không được qua sông
+                        return;
+                    }
+                    if (id.indexOf('do') >= 0 && nodeEnd.i > 4) { // Quân đỏ không được qua sông
+                        return;
+                    }
+
+                    // Nếu ô đến có quân của đối phương, thì xóa quân đối phương
+                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('den') >= 0) {
+                        objRemove = { id: nodeEnd.id };
+                    }
+                }
 
                 let params = new URL(document.location.toString()).searchParams;
                 let roomId = params.get("roomId");
