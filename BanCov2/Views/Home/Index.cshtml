@@ -285,7 +285,51 @@
                     }
                 }
                 // kết thúc xử lý quân xe Đạt
+                // xử lý quân tốt: Quân
+                if (id.indexOf('tot') >= 0) {
+                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
 
+                    // Quân tốt chỉ có thể di chuyển 1 ô
+                    if (gapI > 1 || gapJ > 1 || (gapI == 1 && gapJ == 1)) {
+                        return; // Di chuyển không hợp lệ
+                    }
+
+                    // Nếu quân tốt chưa qua sông, chỉ có thể đi thẳng
+                    if (id.indexOf('do') >= 0 && nodeStart.i < 5) { // Quân đỏ chưa qua sông
+                        if (gapJ != 0 || nodeEnd.i <= nodeStart.i) {
+                            return; // Quân tốt đỏ chỉ có thể đi thẳng xuống
+                        }
+                    }
+
+                    if (id.indexOf('den') >= 0 && nodeStart.i > 4) { // Quân đen chưa qua sông
+                        if (gapJ != 0 || nodeEnd.i >= nodeStart.i) {
+                            return; // Quân tốt đen chỉ có thể đi thẳng lên
+                        }
+                    }
+
+                    // Nếu quân tốt đã qua sông, có thể đi ngang hoặc đi thẳng
+                    if ((id.indexOf('do') >= 0 && nodeStart.i >= 5) || (id.indexOf('den') >= 0 && nodeStart.i <= 4)) {
+                        if (gapI == 1 && gapJ == 1) {
+                            return; // Không thể đi chéo
+                        }
+                    }
+
+                    // Kiểm tra nếu ô đích có quân đối phương
+                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('do') >= 0 && id.indexOf('do') >= 0) {
+                        return; // Không thể ăn quân cùng phe
+                    }
+
+                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('den') >= 0 && id.indexOf('den') >= 0) {
+                        return; // Không thể ăn quân cùng phe
+                    }
+
+                    // Nếu có quân đối phương, xóa quân đó
+                    if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
+                        objRemove = { id: nodeEnd.id };
+                    }
+                }
+                //kết thúc quân tốt
 
 
                 let params = new URL(document.location.toString()).searchParams;
