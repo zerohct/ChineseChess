@@ -330,7 +330,138 @@
                     }
                 }
                 //kết thúc quân tốt
+                // Xử lý quân pháo: Châu
+                // Pháo chỉ ăn được khi có bệ đỡ giữa nó và quân mục tiêu
+                if (id.indexOf('phao') >= 0) {
+                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+                    //  Pháo chỉ ăn được khi có bệ đỡ giữa nó và quân mục tiêu
+                    if (id.indexOf('phao') >= 0) {
+                        var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+                        var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
 
+                        // Kiểm tra di chuyển hợp lệ (phải thẳng hàng ngang hoặc dọc)
+                        if (gapI > 0 && gapJ > 0) {
+                            return; // Không hợp lệ nếu di chuyển chéo
+                        }
+
+                        // Đếm số quân ở giữa đường đi
+                        let piecesBetween = 0;
+                        if (gapI === 0) { // Di chuyển ngang
+                            if (nodeEnd.j > nodeStart.j) {
+                                for (let j = nodeStart.j + 1; j < nodeEnd.j; j++) {
+                                    if (matrix[nodeStart.i][j].id != "") {
+                                        piecesBetween++;
+                                    }
+                                }
+                            } else {
+                                for (let j = nodeStart.j - 1; j > nodeEnd.j; j--) {
+                                    if (matrix[nodeStart.i][j].id != "") {
+                                        piecesBetween++;
+                                    }
+                                }
+                            }
+                        } else if (gapJ === 0) { // Di chuyển dọc
+                            if (nodeEnd.i > nodeStart.i) {
+                                for (let i = nodeStart.i + 1; i < nodeEnd.i; i++) {
+                                    if (matrix[i][nodeStart.j].id != "") {
+                                        piecesBetween++;
+                                    }
+                                }
+                            } else {
+                                for (let i = nodeStart.i - 1; i > nodeEnd.i; i--) {
+                                    if (matrix[i][nodeStart.j].id != "") {
+                                        piecesBetween++;
+                                    }
+                                }
+                            }
+                        }
+
+                        // Nếu không ăn quân, không được có quân nào cản đường
+                        if (nodeEnd.id === "" && piecesBetween > 0) {
+                            return; // Đường đi bị cản
+                        }
+
+                        // Nếu ăn quân, phải có đúng 1 quân nằm giữa
+                        if (nodeEnd.id !== "" && piecesBetween !== 1) {
+                            return; // Không hợp lệ nếu không có đúng 1 quân ở giữa
+                        }
+
+                        // Kiểm tra quân cùng phe: không ăn quân cùng màu
+                        if (nodeEnd.id !== "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
+                            return; // Cùng phe đỏ
+                        }
+                        if (nodeEnd.id !== "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
+                            return; // Cùng phe đen
+                        }
+
+                        // Nếu ăn quân đối phương, xóa quân đó
+                        if (nodeEnd.id !== "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
+                            objRemove = { id: nodeEnd.id };
+                        }
+                    }
+
+                    // Kiểm tra di chuyển hợp lệ (phải thẳng hàng ngang hoặc dọc)
+                    if (gapI > 0 && gapJ > 0) {
+                        return; // Không hợp lệ nếu di chuyển chéo
+                    }
+
+                    // Đếm số quân ở giữa đường đi
+                    let piecesBetween = 0;
+                    if (gapI === 0) { // Di chuyển ngang
+                        if (nodeEnd.j > nodeStart.j) {
+                            for (let j = nodeStart.j + 1; j < nodeEnd.j; j++) {
+                                if (matrix[nodeStart.i][j].id != "") {
+                                    piecesBetween++;
+                                }
+                            }
+                        } else {
+                            for (let j = nodeStart.j - 1; j > nodeEnd.j; j--) {
+                                if (matrix[nodeStart.i][j].id != "") {
+                                    piecesBetween++;
+                                }
+                            }
+                        }
+                    } else if (gapJ === 0) { // Di chuyển dọc
+                        if (nodeEnd.i > nodeStart.i) {
+                            for (let i = nodeStart.i + 1; i < nodeEnd.i; i++) {
+                                if (matrix[i][nodeStart.j].id != "") {
+                                    piecesBetween++;
+                                }
+                            }
+                        } else {
+                            for (let i = nodeStart.i - 1; i > nodeEnd.i; i--) {
+                                if (matrix[i][nodeStart.j].id != "") {
+                                    piecesBetween++;
+                                }
+                            }
+                        }
+                    }
+
+                    // Nếu không ăn quân, không được có quân nào cản đường
+                    if (nodeEnd.id === "" && piecesBetween > 0) {
+                        return; // Đường đi bị cản
+                    }
+
+                    // Nếu ăn quân, phải có đúng 1 quân nằm giữa
+                    if (nodeEnd.id !== "" && piecesBetween !== 1) {
+                        return; // Không hợp lệ nếu không có đúng 1 quân ở giữa
+                    }
+
+                    // Kiểm tra quân cùng phe: không ăn quân cùng màu
+                    if (nodeEnd.id !== "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
+                        return; // Cùng phe đỏ
+                    }
+                    if (nodeEnd.id !== "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
+                        return; // Cùng phe đen
+                    }
+
+                    // Nếu ăn quân đối phương, xóa quân đó
+                    if (nodeEnd.id !== "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
+                        objRemove = { id: nodeEnd.id };
+                    }
+                }
+                // kết thúc quân pháo
 
                 let params = new URL(document.location.toString()).searchParams;
                 let roomId = params.get("roomId");
