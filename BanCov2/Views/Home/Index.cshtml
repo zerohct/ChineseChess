@@ -125,14 +125,13 @@
                     }
                 }
                 // kết thúc quân mã
-
                 // Xử lý quân sĩ (Handle Soldier) -thaihoc
                 // ---------------------
                 if (id.indexOf('si') >= 0) { // Assuming 'si' is part of the Soldier's id
                     var gapI = nodeEnd.i - nodeStart.i;
                     var gapJ = nodeEnd.j - nodeStart.j;
 
-                    var isRed = id.indexOf('den') >= 0;
+                    var isRed = id.indexOf('den') < 0; // Assuming 'den' is black and red doesn't contain 'den'
                     var hasCrossedRiver = isRed ? nodeStart.i >= 5 : nodeStart.i <= 4; // Assuming river is between rows 4 and 5
 
                     // Define valid movements
@@ -141,19 +140,19 @@
                     if (!hasCrossedRiver) {
                         // Before crossing the river: can only move forward
                         if (isRed && gapI === 1 && gapJ === 0) {
-                            validMove = true;
+                            validMove = true; // Red soldier moves downward
                         } else if (!isRed && gapI === -1 && gapJ === 0) {
-                            validMove = true;
+                            validMove = true; // Black soldier moves upward
                         }
                     } else {
                         // After crossing the river: can move forward or sideways
                         if (isRed) {
                             if ((gapI === 1 && gapJ === 0) || (gapI === 0 && Math.abs(gapJ) === 1)) {
-                                validMove = true;
+                                validMove = true; // Red soldier moves down or sideways
                             }
                         } else {
                             if ((gapI === -1 && gapJ === 0) || (gapI === 0 && Math.abs(gapJ) === 1)) {
-                                validMove = true;
+                                validMove = true; // Black soldier moves up or sideways
                             }
                         }
                     }
@@ -163,19 +162,19 @@
                     }
 
                     // Prevent moving into a position occupied by own side
-                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('den') >= 0) || (!isRed && nodeEnd.id.indexOf('do') >= 0))) {
+                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('do') >= 0) || (!isRed && nodeEnd.id.indexOf('den') >= 0))) {
                         return; // Cannot capture own piece
                     }
 
                     // If capturing opponent's piece, mark it for removal
-                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('do') >= 0) || (!isRed && nodeEnd.id.indexOf('den') >= 0))) {
+                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('den') >= 0) || (!isRed && nodeEnd.id.indexOf('do') >= 0))) {
                         objRemove = { id: nodeEnd.id };
                     }
                 }
 
                 // ---------------------
                 // Kết thúc xử lý quân sĩ (End handling Soldier)
-                // ---------------------
+                --------------------
 
                 
 
