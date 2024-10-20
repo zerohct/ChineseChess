@@ -126,39 +126,56 @@
                 }
                 // kết thúc quân mã
 
-                // Xử lý quân Sĩ - Thai Hoc
-                if (id.indexOf('si') >= 0) {
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+                // Xử lý quân sĩ (Handle Soldier) -thaihoc
+                // ---------------------
+                if (id.indexOf('si') >= 0) { // Assuming 'si' is part of the Soldier's id
+                    var gapI = nodeEnd.i - nodeStart.i;
+                    var gapJ = nodeEnd.j - nodeStart.j;
 
-                    // Quân Sĩ chỉ được đi chéo 2 ô
-                    if (!(gapI == 2 && gapJ == 2)) {
-                        return;
-                    }
+                    var isRed = id.indexOf('den') >= 0;
+                    var hasCrossedRiver = isRed ? nodeStart.i >= 5 : nodeStart.i <= 4; // Assuming river is between rows 4 and 5
 
-                    // Phạm vi cung cho quân đỏ
-                    if (id.indexOf('do') >= 0) {  // Quân Sĩ đỏ
-                        if (nodeEnd.i < 7 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return;
+                    // Define valid movements
+                    var validMove = false;
+
+                    if (!hasCrossedRiver) {
+                        // Before crossing the river: can only move forward
+                        if (isRed && gapI === 1 && gapJ === 0) {
+                            validMove = true;
+                        } else if (!isRed && gapI === -1 && gapJ === 0) {
+                            validMove = true;
                         }
-                    }
-
-                    // Phạm vi cung cho quân đen
-                    if (id.indexOf('den') >= 0) {  // Quân Sĩ đen
-                        if (nodeEnd.i > 2 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return;
-                        }
-                    }
-
-                    // Kiểm tra nếu quân địch đứng ở vị trí kết thúc
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf("do") > 0) {
-                        return;
                     } else {
-                        if (nodeEnd.id != "") {
-                            objRemove = { id: nodeEnd.id };
+                        // After crossing the river: can move forward or sideways
+                        if (isRed) {
+                            if ((gapI === 1 && gapJ === 0) || (gapI === 0 && Math.abs(gapJ) === 1)) {
+                                validMove = true;
+                            }
+                        } else {
+                            if ((gapI === -1 && gapJ === 0) || (gapI === 0 && Math.abs(gapJ) === 1)) {
+                                validMove = true;
+                            }
                         }
+                    }
+
+                    if (!validMove) {
+                        return; // Invalid move
+                    }
+
+                    // Prevent moving into a position occupied by own side
+                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('den') >= 0) || (!isRed && nodeEnd.id.indexOf('do') >= 0))) {
+                        return; // Cannot capture own piece
+                    }
+
+                    // If capturing opponent's piece, mark it for removal
+                    if (nodeEnd.id !== "" && ((isRed && nodeEnd.id.indexOf('do') >= 0) || (!isRed && nodeEnd.id.indexOf('den') >= 0))) {
+                        objRemove = { id: nodeEnd.id };
                     }
                 }
+
+                // ---------------------
+                // Kết thúc xử lý quân sĩ (End handling Soldier)
+                // ---------------------
 
                 
 
