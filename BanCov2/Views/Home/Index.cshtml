@@ -13,14 +13,43 @@
         position: absolute;
         width: 50px;
         height: 50px;
+        cursor: pointer;
+        transition: transform 0.2s;
     }
 
     .chessimgnode {
         width: 50px;
         height: 50px;
     }
+
+    .game-info {
+        position: absolute;
+        top: 10px;
+        right: 10px;
+        background: rgba(255, 255, 255, 0.9);
+        padding: 10px;
+        border-radius: 5px;
+    }
+
+    .timer {
+        margin: 5px 0;
+    }
+
+    .red-timer {
+        color: #c00;
+    }
+
+    .black-timer {
+        color: #000;
+    }
 </style>
+
 <div id="app" style="min-height:800px">
+    <div class="game-info">
+        <div class="timer red-timer">Red: {{formatTime(redTime)}}</div>
+        <div class="timer black-timer">Black: {{formatTime(blackTime)}}</div>
+        <div class="timer">Turn: {{formatTime(turnTimeRemaining)}}</div>
+    </div>
     <div class="chessboard">
         <div v-for="item in chessNode" class="chessnode"
              v-on:dragstart="dragStart"
@@ -32,33 +61,146 @@
 </div>
 
 <script>
-    var matrix = [];
+    var matrix = []; 
     var app = new Vue({
         el: '#app',
         data: {
             chessNode: [],
             top: 0,
-            left: 0
-
+            left: 0,
+            redTime: 3600,
+            blackTime: 3600,
+            turnTime: 60,
+            lastMoveTime: null,
+            currentPlayer: 'red',
+            gameState: 'waiting',
+            moveHistory: [],
+            moveCount: 0,
+            lastCapture: 0,
+            consecutiveChecks: 0,
+            gameOver: false,
+            winner: null,
+            initialBoardState: null,
+        },
+        computed: {
+            turnTimeRemaining() {
+                if (!this.lastMoveTime) return this.turnTime;
+                const elapsed = Math.floor((Date.now() - this.lastMoveTime) / 1000);
+                return Math.max(0, this.turnTime - elapsed);
+            }
         },
         methods: {
+            formatTime(seconds) {
+                const mins = Math.floor(seconds / 60);
+                const secs = seconds % 60;
+                return `${mins}:${secs.toString().padStart(2, '0')}`;
+            },
             getChessNode() {
+                // Lấy dữ liệu chessNode và matrix từ API
                 axios({
                     url: '/api/chess/loadChessBoard',
                     method: 'GET',
                     responseType: 'Json',
-
                 }).then((response) => {
                     this.chessNode = response.data.chessNode;
-                    matrix = response.data.maxtrix;
-
+                    matrix = response.data.maxtrix; 
+                    this.initialBoardState = JSON.parse(JSON.stringify(response.data)); 
+                    console.log('Matrix loaded:', matrix);
+                    console.log('ChessNode loaded:', this.chessNode);
+                    this.startGame();
+                    
+                }).catch((error) => {
+                    console.error("Error loading chess board:", error);
                 });
             },
-            getIndexByTopLeft(top, left, matrix) {
+            startGame() {
+                this.gameState = 'playing';
+                this.lastMoveTime = Date.now();
+                this.startTimers();
+            },
+            startTimers() {
+                setInterval(() => {
+                    if (this.gameState === 'playing') {
+                        if (this.currentPlayer === 'red') {
+                            this.redTime--;
+                            if (this.redTime <= 0) this.endGame('black');
+                        } else {
+                            this.blackTime--;
+                            if (this.blackTime <= 0) this.endGame('red');
+                        }
+
+                        if (this.turnTimeRemaining <= 0) {
+                            this.endGame(this.currentPlayer === 'red' ? 'black' : 'red');
+                        }
+                    }
+                }, 1000);
+            },
+            dragStart(event) {
+                const piece = event.currentTarget.id;
+                const isRedPiece = piece.indexOf('do') >= 0;
+                if ((isRedPiece && this.currentPlayer !== 'red') ||
+                    (!isRedPiece && this.currentPlayer === 'red')) {
+                    event.preventDefault();
+                    return;
+                }
+
+                this.top = event.clientY;
+                this.left = event.clientX;
+            },
+            dragEnd(event) {
+                if (!matrix || !matrix.length) {
+                    console.warn("Matrix is not defined or empty");
+                    return;
+                }
+
+                var id = event.currentTarget.id;
+                var moveX = event.clientX - this.left;
+                var moveY = event.clientY - this.top;
+                moveX = moveX + event.currentTarget.offsetLeft;
+                moveY = moveY + event.currentTarget.offsetTop;
+
+                var nodeStart = this.getIndexByTopLeft(event.currentTarget.offsetTop, event.currentTarget.offsetLeft);
+                var nodeEnd = this.getIndexByTopLeft(moveY, moveX);
+
+                if (!nodeEnd) {
+                    console.warn("Invalid move position");
+                    return;
+                }
+
+                var objRemove = null;
+
+                if (id.indexOf('ma') >= 0) {
+                    if (!this.isValidHorseMove(nodeStart, nodeEnd)) return;
+                } else if (id.indexOf('xe') >= 0) {
+                    if (!this.isValidChariotMove(nodeStart, nodeEnd)) return;
+                } else if (id.indexOf('phao') >= 0) {
+                    if (!this.isValidCannonMove(nodeStart, nodeEnd)) return;
+                } else if (id.startsWith('tuong')) {
+                    if (!this.isValidElephantMove(nodeStart, nodeEnd)) return;
+                } else if (id.indexOf('si') >= 0) {
+                    if (!this.isValidAdvisorMove(nodeStart, nodeEnd)) return;
+                } else if (id.indexOf('tot') >= 0) {
+                    if (!this.isValidPawnMove(nodeStart, nodeEnd, id)) return;
+                } else if (id.startsWith('chutuong')) {
+                    if (!this.isValidKingMove(nodeStart, nodeEnd)) return;
+                }
+
+                if (nodeEnd.id !== "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) ||
+                    (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0))) {
+                    return;
+                }
+                if (nodeEnd.id !== "") {
+                    objRemove = { id: nodeEnd.id };
+                }
+
+                this.executeMove(nodeStart, nodeEnd, id, objRemove);
+
+            },
+            getIndexByTopLeft(top, left) {
                 var obj = {};
-                for (var i = 0; i < matrix.length; i++){
-                    for (var j = 0; j < matrix[i].length; j++){
-                        if (Math.abs(matrix[i][j].top - top) < 20 && Math.abs(matrix[i][j].left - left) < 20){
+                for (var i = 0; i < matrix.length; i++) {
+                    for (var j = 0; j < matrix[i].length; j++) {
+                        if (Math.abs(matrix[i][j].top - top) < 20 && Math.abs(matrix[i][j].left - left) < 20) {
                             obj.i = i;
                             obj.j = j;
                             obj.id = matrix[i][j].id;
@@ -68,444 +210,349 @@
                 }
                 return null;
             },
+            isValidKingMove(start, end) {
+                const dx = Math.abs(end.i - start.i);
+                const dy = Math.abs(end.j - start.j);
 
-            dragStart(event) {
-                this.top = event.clientY;
-                this.left = event.clientX;
+                
+                if ((dx === 1 && dy === 0) || (dx === 0 && dy === 1)) {
+                    
+                    if (end.j >= 3 && end.j <= 5) { 
+                        const isRedKing = start.i >= 7;
+                        if ((isRedKing && end.i >= 7) || (!isRedKing && end.i <= 2)) {
+                            return true; 
+                        }
+                    }
+                }
+                return false;
             },
-            dragEnd(event) {
-                var id = event.currentTarget.id;
-                var moveX = event.clientX - this.left;
-                var moveY = event.clientY - this.top;
-                moveX = moveX + event.currentTarget.offsetLeft;
-                moveY = moveY + event.currentTarget.offsetTop;
+            isKingsFacing() {
+                let redKingPos, blackKingPos;
 
-                var nodeStart = this.getIndexByTopLeft(event.currentTarget.offsetTop, event.currentTarget.offsetLeft, matrix);
-                var nodeEnd = this.getIndexByTopLeft(moveY, moveX, matrix);
-                if (nodeEnd == null) {
+                
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 3; j <= 5; j++) { 
+
+                        if (matrix[i][j].id === 'chutuongdo') redKingPos = { i, j };
+                        if (matrix[i][j].id === 'chutuongden') blackKingPos = { i, j };
+                    }
+                }
+
+                if (redKingPos && blackKingPos && redKingPos.j === blackKingPos.j) {
+                    
+                    const minI = Math.min(redKingPos.i, blackKingPos.i);
+                    const maxI = Math.max(redKingPos.i, blackKingPos.i);
+
+                    for (let i = minI + 1; i < maxI; i++) {
+                        if (matrix[i][redKingPos.j].id !== "") return false;
+                    }
+                    return true; 
+                }
+                return false;
+            },
+
+            isValidPawnMove(start, end, id) {
+                const dx = end.i - start.i;
+                const dy = Math.abs(end.j - start.j);
+
+                if (id.indexOf('do') >= 0) { 
+                    if (start.i <= 4) { 
+                        return dx === 1 && dy === 0; 
+                    } else { 
+                        return (dx === 1 && dy === 0) || (dx === 0 && dy === 1);
+                    }
+                } else { 
+                    if (start.i >= 5) {
+                        return dx === -1 && dy === 0; 
+                    } else { 
+                        return (dx === -1 && dy === 0) || (dx === 0 && dy === 1); 
+                    }
+                }
+            },
+            isValidAdvisorMove(start, end) {
+                const dx = Math.abs(end.i - start.i);
+                const dy = Math.abs(end.j - start.j);
+                return (dx === 1 && dy === 1) && (end.j >= 3 && end.j <= 5) && (end.i >= 0 && end.i <= 2 || end.i >= 7 && end.i <= 9);
+            },
+            isValidElephantMove(start, end) {
+                const dx = Math.abs(end.i - start.i);
+                const dy = Math.abs(end.j - start.j);
+                const midX = (start.i + end.i) / 2;
+                const midY = (start.j + end.j) / 2;
+                if (dx === 2 && dy === 2 && matrix[midX][midY].id === "") {
+                    if (end.i <= 4 && start.i <= 4) return true; 
+                    if (end.i >= 5 && start.i >= 5) return true;
+                }
+                return false;
+            },
+            isValidHorseMove(start, end) {
+                const dx = Math.abs(end.i - start.i);
+                const dy = Math.abs(end.j - start.j);
+                if (!((dx === 1 && dy === 2) || (dx === 2 && dy === 1))) return false;
+
+                
+                return true;
+            },
+            isValidChariotMove(start, end) {
+                if (start.i === end.i || start.j === end.j) {
+                    const min = start.i === end.i ? Math.min(start.j, end.j) : Math.min(start.i, end.i);
+                    const max = start.i === end.i ? Math.max(start.j, end.j) : Math.max(start.i, end.i);
+                    for (let k = min + 1; k < max; k++) {
+                        if (start.i === end.i && matrix[start.i][k].id !== "") return false;
+                        if (start.j === end.j && matrix[k][start.j].id !== "") return false;
+                    }
+                    return true;
+                }
+                return false;
+            },
+            isValidCannonMove(start, end) {
+                if (start.i === end.i || start.j === end.j) {
+                    let count = 0;
+                    const min = start.i === end.i ? Math.min(start.j, end.j) : Math.min(start.i, end.i);
+                    const max = start.i === end.i ? Math.max(start.j, end.j) : Math.max(start.i, end.i);
+
+                    
+                    for (let k = min + 1; k < max; k++) {
+                        if (start.i === end.i && matrix[start.i][k].id !== "") count++;
+                        if (start.j === end.j && matrix[k][start.j].id !== "") count++; 
+                    }
+
+                    
+                    if (count === 0 && end.id === "") return true;
+
+                    
+                    if (count === 1 && end.id !== "") return true;
+                }
+                return false; 
+            },
+            isKingInCheck(player) {
+                const kingId = player === 'red' ? 'chutuongdo' : 'chutuongden';
+                const kingPos = this.getPositionFromMatrix(kingId);
+                if (!kingPos) return false;
+
+                // Kiểm tra tất cả các quân của đối thủ
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[i].length; j++) {
+                        const piece = matrix[i][j].id;
+                        if (piece && (player === 'red' ? piece.includes('den') : piece.includes('do'))) {
+                            const start = { i, j };
+                            const end = kingPos;
+                            if (this.isValidMove(start, end, piece)) {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                return false;
+            },
+
+            isValidMove(start, end, pieceId) {
+                // Sử dụng các phương thức kiểm tra nước đi hiện có
+                if (pieceId.includes('ma')) return this.isValidHorseMove(start, end);
+                if (pieceId.includes('xe')) return this.isValidChariotMove(start, end);
+                if (pieceId.includes('phao')) return this.isValidCannonMove(start, end);
+                if (pieceId.startsWith('tuong')) return this.isValidElephantMove(start, end);
+                if (pieceId.includes('si')) return this.isValidAdvisorMove(start, end);
+                if (pieceId.includes('tot')) return this.isValidPawnMove(start, end, pieceId);
+                if (pieceId.startsWith('chutuong')) return this.isValidKingMove(start, end);
+                return false;
+            },
+
+            isMoveSafe(start, end, pieceId) {
+                // Lưu trạng thái hiện tại
+                const originalEndPiece = matrix[end.i][end.j].id;
+                const originalStartPiece = matrix[start.i][start.j].id;
+
+                // Thực hiện nước đi
+                matrix[end.i][end.j].id = pieceId;
+                matrix[start.i][start.j].id = "";
+
+                // Kiểm tra xem vua có bị chiếu không sau nước đi
+                const isSafe = !this.isKingInCheck(this.currentPlayer);
+
+                // Khôi phục trạng thái ban đầu
+                matrix[start.i][start.j].id = originalStartPiece;
+                matrix[end.i][end.j].id = originalEndPiece;
+
+                return isSafe;
+            },
+
+            executeMove(nodeStart, nodeEnd, id, objRemove) {
+                if (!this.isMoveSafe(nodeStart, nodeEnd, id)) {
+                    alert("Nước đi không hợp lệ! Quân tướng sẽ bị chiếu.");
                     return;
                 }
-                var objRemove = null;
+                matrix[nodeStart.i][nodeStart.j].id = "";
+                matrix[nodeEnd.i][nodeEnd.j].id = id;
 
-                // xử lý quân mã
-                if(id.indexOf('ma')>=0){
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
-                    if (!((gapI == 1 && gapJ == 2) || (gapJ == 1 && gapI == 2))) {
-                        return;
-                    }
-                    if ((gapI == 1 && gapJ == 2) && (nodeEnd.j > nodeStart.j)) {
-                        if (matrix[nodeStart.i][nodeStart.j + 1].id != "") {
-                            return;
-                        }
-                    }
-                    if ((gapI == 1 && gapJ == 2) && (nodeEnd.j < nodeStart.j)) {
-                        if (matrix[nodeStart.i][nodeStart.j - 1].id != "") {
-                            return;
-                        }
-                    }
-                    if ((gapI == 2 && gapJ == 1) && (nodeEnd.i > nodeStart.i)) {
-                        if (matrix[nodeStart.i + 1][nodeStart.j].id != "") {
-                            return;
-                        }
-                    }
-                    if ((gapI == 2 && gapJ == 1) && (nodeEnd.i < nodeStart.i)) {
-                        if (matrix[nodeStart.i - 1][nodeStart.j].id != "") {
-                            return;
-                        }
-                    }
+                var obj = document.getElementById(id);
+                obj.style.top = matrix[nodeEnd.i][nodeEnd.j].top + "px";
+                obj.style.left = matrix[nodeEnd.i][nodeEnd.j].left + "px";
 
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf("do") > 0) {
-                        return;
-                    }
-                    else {
-                        if (nodeEnd.id != "") {
-                            objRemove = { id: nodeEnd.id };
-                        }
-                    }
-                }
-                // kết thúc quân mã
+                
+                if (this.isKingsFacing()) {
+                    alert("Tướng đối mặt, không thể thực hiện nước đi!");
 
-                // Xử lý quân Sĩ - Thai Hoc
-                if (id.indexOf('si') >= 0) {
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+                    
+                    matrix[nodeEnd.i][nodeEnd.j].id = ""; 
+                    matrix[nodeStart.i][nodeStart.j].id = id; 
 
-                    // Quân Sĩ chỉ được đi chéo 2 ô
-                    if (!(gapI == 2 && gapJ == 2)) {
-                        return;
-                    }
-
-                    // Phạm vi cung cho quân đỏ
-                    if (id.indexOf('do') >= 0) {  // Quân Sĩ đỏ
-                        if (nodeEnd.i < 7 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return;
-                        }
-                    }
-
-                    // Phạm vi cung cho quân đen
-                    if (id.indexOf('den') >= 0) {  // Quân Sĩ đen
-                        if (nodeEnd.i > 2 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return;
-                        }
-                    }
-
-                    // Kiểm tra nếu quân địch đứng ở vị trí kết thúc
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf("do") > 0) {
-                        return;
-                    } else {
-                        if (nodeEnd.id != "") {
-                            objRemove = { id: nodeEnd.id };
-                        }
-                    }
+                    obj.style.top = matrix[nodeStart.i][nodeStart.j].top + "px";
+                    obj.style.left = matrix[nodeStart.i][nodeStart.j].left + "px"; 
+                    return; 
                 }
 
                 
+                if (objRemove) {
+                    var temp = document.getElementById(objRemove.id);
+                    temp.style.display = "none"; 
 
-                //xử lý quân tướng: khánh
-                if (id.startsWith('chutuong')) { // Assuming king's id contains 'tuong'
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
-
-                    // Tướng chỉ có thể di chuyển 1 ô theo bất kỳ hướng nào (ngang hoặc dọc)
-                    if (!(gapI === 1 && gapJ === 0) && !(gapI === 0 && gapJ === 1)) {
-                        return; // Di chuyển không hợp lệ
-                    }
-
-                    // Kiểm tra cung cho Tướng đỏ
-                    if (id.indexOf('den') >= 0) {
-                        // Cung của Tướng den (từ hàng 7 đến 9, cột 3 đến 5)
-                        if (nodeEnd.i < 7 || nodeEnd.i > 9 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return; // Di chuyển ngoài cung của Tướng đỏ
-                        }
-                    }
-
-                    // Kiểm tra cung cho Tướng đen
-                    if (id.indexOf('do') >= 0) {
-                        // Cung của Tướng do (từ hàng 0 đến 2, cột 3 đến 5)
-                        if (nodeEnd.i < 0 || nodeEnd.i > 2 || nodeEnd.j < 3 || nodeEnd.j > 5) {
-                            return; // Di chuyển ngoài cung của Tướng đen
-                        }
-                    }
-
-                    // Kiểm tra nếu ô đích có quân cờ cùng phe, thì không cho di chuyển
-                    if (nodeEnd.id != "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
-                        return; // Quân cờ cùng phe (đỏ)
-                    }
-                    if (nodeEnd.id != "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
-                        return; // Quân cờ cùng phe (đen)
-                    }
-
-                    // Nếu ô đích có quân đối phương, loại bỏ quân đó
-                    if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
-                        objRemove = { id: nodeEnd.id };
-                    }
-                }
-                //kết thúc xử lý quân tướng
-
-                // Xử lý cho quân tượng
-                if (id.startsWith('tuong') ) { // Assuming 'tuong' is part of the bishop's id
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
-
-                    // Kiểm tra xem quân tượng có di chuyển đúng 2 ô chéo không
-                    if (!(gapI === 2 && gapJ === 2)) {
-                        return;
-                    }
-
-                    // Kiểm tra đường đi có bị cản không (đường chéo giữa 2 ô)
-                    var midI = (nodeEnd.i + nodeStart.i) / 2;
-                    var midJ = (nodeEnd.j + nodeStart.j) / 2;
-                    if (matrix[midI][midJ].id != "") {
-                        return;
-                    }
-
-                    // Kiểm tra quân tượng có vượt qua sông không (ví dụ sông ở dòng 5)
-                    if (id.indexOf('den') >= 0 && nodeEnd.i < 5) { // Quân đen không được qua sông
-                        return;
-                    }
-                    if (id.indexOf('do') >= 0 && nodeEnd.i > 4) { // Quân đỏ không được qua sông
-                        return;
-                    }
-
-                    // Nếu ô đến có quân của đối phương, thì xóa quân đối phương
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('den') >= 0) {
-                        objRemove = { id: nodeEnd.id };
+                    
+                    if (objRemove.id.startsWith('chutuong')) {
+                        this.gameOver = true;
+                        this.winner = this.currentPlayer;
+                        this.endGame(this.winner); 
                     }
                 }
 
-
-                // xử lý quân xe Đạt
-                if (id.indexOf('xe') >= 0) { 
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
-
-                  
-                    if (gapI > 0 && gapJ > 0) {
-                        return;
-                    }
-
-                    if (gapI == 0) { 
-                        if (nodeEnd.j > nodeStart.j) {
-                            for (var j = nodeStart.j + 1; j < nodeEnd.j; j++) {
-                                if (matrix[nodeStart.i][j].id != "") {
-                                    return; 
-                                }
-                            }
-                        } else {
-                            for (var j = nodeStart.j - 1; j > nodeEnd.j; j--) {
-                                if (matrix[nodeStart.i][j].id != "") {
-                                    return; 
-                                }
-                            }
-                        }
-                    } else if (gapJ == 0) { 
-                        if (nodeEnd.i > nodeStart.i) {
-                            for (var i = nodeStart.i + 1; i < nodeEnd.i; i++) {
-                                if (matrix[i][nodeStart.j].id != "") {
-                                    return; 
-                                }
-                            }
-                        } else {
-                            for (var i = nodeStart.i - 1; i > nodeEnd.i; i--) {
-                                if (matrix[i][nodeStart.j].id != "") {
-                                    return; 
-                                }
-                            }
-                        }
-                    }
-
-                  
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('do') >= 0) {
-                        return;
-                    }
-
-                    if (nodeEnd.id != "") {
-                        objRemove = { id: nodeEnd.id };
+                const nextPlayer = this.currentPlayer === 'red' ? 'black' : 'red';
+                if (this.isKingInCheck(nextPlayer)) {
+                    if (this.isCheckmate(nextPlayer)) {
+                        alert(`Chiếu bí! ${this.currentPlayer.toUpperCase()} thắng!`);
+                        this.endGame(this.currentPlayer);
+                    } else {
+                        alert(`${nextPlayer.toUpperCase()} bị chiếu!`);
                     }
                 }
-                // kết thúc xử lý quân xe Đạt
-                // xử lý quân tốt: Quân
-                if (id.indexOf('tot') >= 0) {
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+                this.moveHistory.push({ from: nodeStart, to: nodeEnd, piece: id });
+                this.currentPlayer = this.currentPlayer === 'red' ? 'black' : 'red';
+                this.lastMoveTime = Date.now();
+                this.moveCount++;
 
-                    // Quân tốt chỉ có thể di chuyển 1 ô
-                    if (gapI > 1 || gapJ > 1 || (gapI == 1 && gapJ == 1)) {
-                        return; // Di chuyển không hợp lệ
-                    }
 
-                    // Nếu quân tốt chưa qua sông, chỉ có thể đi thẳng
-                    if (id.indexOf('do') >= 0 && nodeStart.i < 5) { // Quân đỏ chưa qua sông
-                        if (gapJ != 0 || nodeEnd.i <= nodeStart.i) {
-                            return; // Quân tốt đỏ chỉ có thể đi thẳng xuống
-                        }
-                    }
-
-                    if (id.indexOf('den') >= 0 && nodeStart.i > 4) { // Quân đen chưa qua sông
-                        if (gapJ != 0 || nodeEnd.i >= nodeStart.i) {
-                            return; // Quân tốt đen chỉ có thể đi thẳng lên
-                        }
-                    }
-
-                    // Nếu quân tốt đã qua sông, có thể đi ngang hoặc đi thẳng
-                    if ((id.indexOf('do') >= 0 && nodeStart.i >= 5) || (id.indexOf('den') >= 0 && nodeStart.i <= 4)) {
-                        if (gapI == 1 && gapJ == 1) {
-                            return; // Không thể đi chéo
-                        }
-                    }
-
-                    // Kiểm tra nếu ô đích có quân đối phương
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('do') >= 0 && id.indexOf('do') >= 0) {
-                        return; // Không thể ăn quân cùng phe
-                    }
-
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('den') >= 0 && id.indexOf('den') >= 0) {
-                        return; // Không thể ăn quân cùng phe
-                    }
-
-                    // Nếu có quân đối phương, xóa quân đó
-                    if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
-                        objRemove = { id: nodeEnd.id };
-                    }
+                if (this.isGameOver()) {
+                    this.endGame(this.winner || (this.currentPlayer === 'red' ? 'black' : 'red'));
                 }
-                //kết thúc quân tốt
-                // Xử lý quân pháo: Châu
-                // Pháo chỉ ăn được khi có bệ đỡ giữa nó và quân mục tiêu
-                if (id.indexOf('phao') >= 0) {
-                    var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                    var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
-                    //  Pháo chỉ ăn được khi có bệ đỡ giữa nó và quân mục tiêu
-                    if (id.indexOf('phao') >= 0) {
-                        var gapI = Math.abs(nodeEnd.i - nodeStart.i);
-                        var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+            },
 
-                        // Kiểm tra di chuyển hợp lệ (phải thẳng hàng ngang hoặc dọc)
-                        if (gapI > 0 && gapJ > 0) {
-                            return; // Không hợp lệ nếu di chuyển chéo
-                        }
-
-                        // Đếm số quân ở giữa đường đi
-                        let piecesBetween = 0;
-                        if (gapI === 0) { // Di chuyển ngang
-                            if (nodeEnd.j > nodeStart.j) {
-                                for (let j = nodeStart.j + 1; j < nodeEnd.j; j++) {
-                                    if (matrix[nodeStart.i][j].id != "") {
-                                        piecesBetween++;
-                                    }
-                                }
-                            } else {
-                                for (let j = nodeStart.j - 1; j > nodeEnd.j; j--) {
-                                    if (matrix[nodeStart.i][j].id != "") {
-                                        piecesBetween++;
-                                    }
-                                }
-                            }
-                        } else if (gapJ === 0) { // Di chuyển dọc
-                            if (nodeEnd.i > nodeStart.i) {
-                                for (let i = nodeStart.i + 1; i < nodeEnd.i; i++) {
-                                    if (matrix[i][nodeStart.j].id != "") {
-                                        piecesBetween++;
-                                    }
-                                }
-                            } else {
-                                for (let i = nodeStart.i - 1; i > nodeEnd.i; i--) {
-                                    if (matrix[i][nodeStart.j].id != "") {
-                                        piecesBetween++;
+            isCheckmate(player) {
+                // Kiểm tra tất cả các nước đi có thể của người chơi
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[i].length; j++) {
+                        const piece = matrix[i][j].id;
+                        if (piece && (player === 'red' ? piece.includes('do') : piece.includes('den'))) {
+                            for (let x = 0; x < matrix.length; x++) {
+                                for (let y = 0; y < matrix[x].length; y++) {
+                                    const start = { i, j };
+                                    const end = { i: x, j: y };
+                                    if (this.isValidMove(start, end, piece) && this.isMoveSafe(start, end, piece)) {
+                                        return false; // Có ít nhất một nước đi hợp lệ
                                     }
                                 }
                             }
                         }
-
-                        // Nếu không ăn quân, không được có quân nào cản đường
-                        if (nodeEnd.id === "" && piecesBetween > 0) {
-                            return; // Đường đi bị cản
-                        }
-
-                        // Nếu ăn quân, phải có đúng 1 quân nằm giữa
-                        if (nodeEnd.id !== "" && piecesBetween !== 1) {
-                            return; // Không hợp lệ nếu không có đúng 1 quân ở giữa
-                        }
-
-                        // Kiểm tra quân cùng phe: không ăn quân cùng màu
-                        if (nodeEnd.id !== "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
-                            return; // Cùng phe đỏ
-                        }
-                        if (nodeEnd.id !== "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
-                            return; // Cùng phe đen
-                        }
-
-                        // Nếu ăn quân đối phương, xóa quân đó
-                        if (nodeEnd.id !== "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
-                            objRemove = { id: nodeEnd.id };
-                        }
-                    }
-
-                    // Kiểm tra di chuyển hợp lệ (phải thẳng hàng ngang hoặc dọc)
-                    if (gapI > 0 && gapJ > 0) {
-                        return; // Không hợp lệ nếu di chuyển chéo
-                    }
-
-                    // Đếm số quân ở giữa đường đi
-                    let piecesBetween = 0;
-                    if (gapI === 0) { // Di chuyển ngang
-                        if (nodeEnd.j > nodeStart.j) {
-                            for (let j = nodeStart.j + 1; j < nodeEnd.j; j++) {
-                                if (matrix[nodeStart.i][j].id != "") {
-                                    piecesBetween++;
-                                }
-                            }
-                        } else {
-                            for (let j = nodeStart.j - 1; j > nodeEnd.j; j--) {
-                                if (matrix[nodeStart.i][j].id != "") {
-                                    piecesBetween++;
-                                }
-                            }
-                        }
-                    } else if (gapJ === 0) { // Di chuyển dọc
-                        if (nodeEnd.i > nodeStart.i) {
-                            for (let i = nodeStart.i + 1; i < nodeEnd.i; i++) {
-                                if (matrix[i][nodeStart.j].id != "") {
-                                    piecesBetween++;
-                                }
-                            }
-                        } else {
-                            for (let i = nodeStart.i - 1; i > nodeEnd.i; i--) {
-                                if (matrix[i][nodeStart.j].id != "") {
-                                    piecesBetween++;
-                                }
-                            }
-                        }
-                    }
-
-                    // Nếu không ăn quân, không được có quân nào cản đường
-                    if (nodeEnd.id === "" && piecesBetween > 0) {
-                        return; // Đường đi bị cản
-                    }
-
-                    // Nếu ăn quân, phải có đúng 1 quân nằm giữa
-                    if (nodeEnd.id !== "" && piecesBetween !== 1) {
-                        return; // Không hợp lệ nếu không có đúng 1 quân ở giữa
-                    }
-
-                    // Kiểm tra quân cùng phe: không ăn quân cùng màu
-                    if (nodeEnd.id !== "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
-                        return; // Cùng phe đỏ
-                    }
-                    if (nodeEnd.id !== "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
-                        return; // Cùng phe đen
-                    }
-
-                    // Nếu ăn quân đối phương, xóa quân đó
-                    if (nodeEnd.id !== "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
-                        objRemove = { id: nodeEnd.id };
                     }
                 }
-                // kết thúc quân pháo
+                return true; // Không có nước đi hợp lệ nào
+            },
 
-                let params = new URL(document.location.toString()).searchParams;
-                let roomId = params.get("roomId");
-                var para = [{ id : id, fromi : nodeStart.i, fromj : nodeStart.j, toi : nodeEnd.i, toj : nodeEnd.j }];
-                if (objRemove != null) {
-                    para.push(objRemove);
-                }
-                axios({
-                    url: 'api/chess/move-chess-node?roomId='+roomId,
-                    method: 'Post',
-                    responseType: 'Json',
-                    data: para
-                }).then((response) => {
+            isGameOver() {
+                return this.gameOver || this.redTime <= 0 || this.blackTime <= 0;
+            },
+            endGame(winner) {
+                this.gameState = 'ended';
+                this.winner = winner;
+                alert(`Game over! ${winner} wins!`);
+            },
+            reverseChessboard() {
+                
+                this.chessNode = JSON.parse(JSON.stringify(this.initialBoardState.chessNode));
+                matrix = JSON.parse(JSON.stringify(this.initialBoardState.maxtrix));
 
+                
+                this.chessNode.forEach(node => {
+                    if (node.visible !== 'none') {
+                        node.top = 800 - node.top;
+                        node.left = 800 - node.left;
+                    }
                 });
 
                 
-            }
-        },
-        mounted: function () {
-            this.getChessNode();
-            let params = new URL(document.location.toString()).searchParams;
-            let roomId = params.get("roomId");
-            var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub?roomId="+roomId).build();
+                matrix.reverse();
+                matrix.forEach(row => row.reverse());
 
-            connection.on("ReceiveChessMove", function (message) {
-                console.log(message);
+                
+                this.$nextTick(() => {
+                    this.chessNode.forEach(node => {
+                        if (node.visible !== 'none') {
+                            const obj = document.getElementById(node.id);
+                            obj.style.top = node.top + "px";
+                            obj.style.left = node.left + "px";
+                            obj.style.display = "block";
+                        }
+                    });
+                });
+
+                
+                this.currentPlayer = 'red';
+                this.redTime = 3600;
+                this.blackTime = 3600;
+                this.moveHistory = [];
+                this.moveCount = 0;
+                this.gameOver = false;
+                this.winner = null;
+
+                this.startGame();
+            },
+
+
+            getPositionFromMatrix(id) {
+                for (let i = 0; i < matrix.length; i++) {
+                    for (let j = 0; j < matrix[i].length; j++) {
+                        if (matrix[i][j].id === id) {
+                            return { i, j };
+                        }
+                    }
+                }
+                return null;
+            },
+
+        },
+        mounted() {
+            this.getChessNode(); 
+
+            let params = new URLSearchParams(window.location.search);
+            let roomId = params.get("roomId");
+            var connection = new signalR.HubConnectionBuilder().withUrl(`/chatHub?roomId=${roomId}`).build();
+
+            connection.on("ReceiveChessMove", (message) => {
                 var response = JSON.parse(message);
-                matrix[response[0].fromi][response[0].fromj].id = "";
+                var nodeStart = matrix[response[0].fromi][response[0].fromj];
                 var nodeEnd = matrix[response[0].toi][response[0].toj];
-                nodeEnd.id = response[0].id;
+
+                matrix[response[0].fromi][response[0].fromj].id = "";
+                matrix[response[0].toi][response[0].toj].id = response[0].id;
+
                 var obj = document.getElementById(response[0].id);
                 obj.style.top = nodeEnd.top + "px";
                 obj.style.left = nodeEnd.left + "px";
+
                 if (response.length > 1) {
                     var temp = document.getElementById(response[1].id);
                     temp.style.display = "none";
                 }
             });
-            connection.start().then(function () {
 
-            }).catch(function (err) {
-                return console.error(err.toString());
+            connection.start().then(() => {
+                console.log("SignalR connected");
+            }).catch((err) => {
+                console.error("Error connecting to SignalR:", err);
             });
+
+            const reverseButton = document.createElement('button');
+            reverseButton.textContent = 'Reverse Chessboard';
+            reverseButton.onclick = this.reverseChessboard;
+            document.body.appendChild(reverseButton);
         }
     });
 </script>
