@@ -30,9 +30,9 @@
 
         .game-info {
             position: absolute;
-            top: 10px;
-            right: 10px;
-            background: rgba(255, 255, 255, 0.9);
+            top: 112px;
+            left: 190px;
+            background: rgba(175, 221, 197, 0.9);
             padding: 10px;
             border-radius: 5px;
         }
@@ -51,8 +51,8 @@
 
         .chatbox {
             position: absolute;
-            top: 200px;
-            right: 10px;
+            top: 260px;
+            right: 310px;
             min-width: 520px;
             height: 520px;
             background-color: #f9f9f9;
@@ -67,7 +67,8 @@
             flex-grow: 1;
             padding: 10px;
             list-style-type: none;
-            max-height: 380px;
+            max-height: 360px;
+            min-height: 360px;
             overflow-y: auto;
         }
 
@@ -141,10 +142,10 @@
                     <div>User</div>
                     <input type="text" id="userInput" />
                 </div>
-                <div class="row p-1">
+                <div class="row p-1 d-flex">
                     <div>Message</div>
-                    <input type="text" class="w-100" id="messageInput" />
-                    <input type="button" id="sendButton" value="Send Message" />
+                    <input type="text" class="col-8" id="messageInput" />
+                    <input type="button" class="col-4" id="sendButton" value="Send Message" />
                 </div>
             </div>
         </div>
@@ -649,3 +650,45 @@
     </script>
 </body>
 </html>
+
+<script>
+    // Khởi tạo kết nối SignalR
+    var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+    // Hàm cuộn xuống cuối danh sách tin nhắn
+    function scrollToBottom() {
+        var messagesList = document.getElementById('messagesList');
+        messagesList.scrollTop = messagesList.scrollHeight;
+    }
+
+
+    // Kết nối đến server qua SignalR
+    connection.start().then(function () {
+        console.log("SignalR connected");
+
+        // Khi nhận tin nhắn từ server
+        connection.on("ReceiveMessage", function (message) {
+            scrollToBottom();
+
+        });
+
+        // Gửi tin nhắn khi người dùng nhấn "Send Message"
+        document.getElementById('sendButton').addEventListener('click', function () {
+            var message = document.getElementById('messageInput').value.trim();
+
+            if (message === "") {
+                alert("Tin nhắn không được để trống!");
+                return;
+            }
+            // Nếu tin nhắn hợp lệ, gửi qua SignalR
+            connection.invoke("SendMessage", message).catch(function (err) {
+                return console.error(err.toString());
+            });
+
+            document.getElementById('messageInput').value = '';  // Xóa nội dung ô nhập liệu
+        });
+    }).catch(function (err) {
+        return console.error(err.toString());
+    });
+
+</script>
