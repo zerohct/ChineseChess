@@ -2,6 +2,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/0.19.0/axios.min.js"></script>
 <script src="~/js/signalr/dist/browser/signalr.js"></script>
 <style>
+
     .chessboard {
         width: 850px;
         height: 850px;
@@ -42,6 +43,66 @@
     .black-timer {
         color: #000;
     }
+  	.chatbox {
+		min-width: 520px;
+		top: 200px;
+		right: 10px;
+	}
+
+	.chatbox {
+		position: absolute;
+		height: 520px;
+		background-color: #f9f9f9;
+		border: 1px solid #ccc;
+		border-radius: 10px;
+		box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+		overflow: hidden;
+		display: flex;
+		
+	}
+
+	#messagesList {
+		flex-grow: 1;
+		padding: 10px;
+		margin: 0;
+		list-style-type: none;
+		overflow-y: auto; /* Thanh cuộn dọc */
+		max-height: 380px; 
+		min-height: 380px;
+	}
+
+		#messagesList li {
+			padding: 5px;
+			margin-bottom: 5px;
+			background-color: #e0e0e0;
+			border-radius: 5px;
+		}
+
+	input[type="text"] {
+		width: 100%;
+		padding: 5px;
+		margin-bottom: 5px;
+		border: 1px solid #ccc;
+		border-radius: 5px;
+	}
+
+	input[type="button"] {
+		padding: 8px 15px;
+		background-color: #4CAF50;
+		color: white;
+		border: none;
+		border-radius: 5px;
+		cursor: pointer;
+	}
+
+		input[type="button"]:hover {
+			background-color: #45a049;
+		}
+
+	.container {
+		padding: 10px;
+	}
+
 </style>
 
 <div id="app" style="min-height:800px">
@@ -58,9 +119,356 @@
             <img :src="'/' + item.src" class="chessimgnode" />
         </div>
     </div>
+  <div class="chatbox" style="position: absolute">
+		<div class="container">
+
+			<div class="row p-1">
+				<div class="">
+					<ul id="messagesList"></ul>
+				</div>
+			</div>
+
+			<div class="row p-1">
+				<div class="col-2">User</div>
+				<div class="col-10"><input type="text" id="userInput" /></div>
+			</div>
+
+			<div class="row p-1" >
+				<div class="col-2"> Message </div>
+				<div class="col-6"><input type="text" class="w-100" id="messageInput" /></div>
+				<div class="col-4 text-end">
+					<input type="button" id="sendButton" value="Send Message" />
+				</div>
+			</div>
+		</div>
+
 </div>
 
+
 <script>
+
+	var matrix = [];
+	var app = new Vue({
+		el: '#app',
+		data: {
+			chessNode: [],
+			top: 0,
+			left: 0
+
+		},
+		methods: {
+			getChessNode() {
+				axios({
+					url: '/api/chess/loadChessBoard',
+					method: 'GET',
+					responseType: 'Json',
+
+				}).then((response) => {
+					this.chessNode = response.data.chessNode;
+					matrix = response.data.maxtrix;
+
+				});
+			},
+			getIndexByTopLeft(top, left, matrix) {
+				var obj = {};
+				for (var i = 0; i < matrix.length; i++) {
+					for (var j = 0; j < matrix[i].length; j++) {
+						if (Math.abs(matrix[i][j].top - top) < 20 && Math.abs(matrix[i][j].left - left) < 20) {
+							obj.i = i;
+							obj.j = j;
+							obj.id = matrix[i][j].id;
+							return obj;
+						}
+					}
+				}
+				return null;
+			},
+
+			dragStart(event) {
+				this.top = event.clientY;
+				this.left = event.clientX;
+			},
+			dragEnd(event) {
+				var id = event.currentTarget.id;
+				var moveX = event.clientX - this.left;
+				var moveY = event.clientY - this.top;
+				moveX = moveX + event.currentTarget.offsetLeft;
+				moveY = moveY + event.currentTarget.offsetTop;
+
+				var nodeStart = this.getIndexByTopLeft(event.currentTarget.offsetTop, event.currentTarget.offsetLeft, matrix);
+				var nodeEnd = this.getIndexByTopLeft(moveY, moveX, matrix);
+				if (nodeEnd == null) {
+					return;
+				}
+				var objRemove = null;
+
+				// xử lý quân mã
+				if (id.indexOf('ma') >= 0) {
+					var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+					var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+					if (!((gapI == 1 && gapJ == 2) || (gapJ == 1 && gapI == 2))) {
+						return;
+					}
+					if ((gapI == 1 && gapJ == 2) && (nodeEnd.j > nodeStart.j)) {
+						if (matrix[nodeStart.i][nodeStart.j + 1].id != "") {
+							return;
+						}
+					}
+					if ((gapI == 1 && gapJ == 2) && (nodeEnd.j < nodeStart.j)) {
+						if (matrix[nodeStart.i][nodeStart.j - 1].id != "") {
+							return;
+						}
+					}
+					if ((gapI == 2 && gapJ == 1) && (nodeEnd.i > nodeStart.i)) {
+						if (matrix[nodeStart.i + 1][nodeStart.j].id != "") {
+							return;
+						}
+					}
+					if ((gapI == 2 && gapJ == 1) && (nodeEnd.i < nodeStart.i)) {
+						if (matrix[nodeStart.i - 1][nodeStart.j].id != "") {
+							return;
+						}
+					}
+
+					if (nodeEnd.id != "" && nodeEnd.id.indexOf("do") > 0) {
+						return;
+					}
+					else {
+						if (nodeEnd.id != "") {
+							objRemove = { id: nodeEnd.id };
+						}
+					}
+				}
+
+				// kết thúc quân mã
+
+				//xử lý quân tướng: khánh
+				if (id.indexOf('king') >= 0) {
+					var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+					var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+
+					// Tướng chỉ có thể di chuyển 1 ô theo bất kỳ hướng nào (ngang hoặc dọc)
+					if (!(gapI === 1 && gapJ === 0) && !(gapI === 0 && gapJ === 1)) {
+						return; // Di chuyển không hợp lệ
+					}
+
+					// Kiểm tra cung cho Tướng đỏ
+					if (id.indexOf('den') >= 0) {
+						// Cung của Tướng den (từ hàng 7 đến 9, cột 3 đến 5)
+						if (nodeEnd.i < 7 || nodeEnd.i > 9 || nodeEnd.j < 3 || nodeEnd.j > 5) {
+							return; // Di chuyển ngoài cung của Tướng đỏ
+						}
+					}
+
+					// Kiểm tra cung cho Tướng đen
+					if (id.indexOf('do') >= 0) {
+						// Cung của Tướng do (từ hàng 0 đến 2, cột 3 đến 5)
+						if (nodeEnd.i < 0 || nodeEnd.i > 2 || nodeEnd.j < 3 || nodeEnd.j > 5) {
+							return; // Di chuyển ngoài cung của Tướng đen
+						}
+					}
+
+					// Kiểm tra nếu ô đích có quân cờ cùng phe, thì không cho di chuyển
+					if (nodeEnd.id != "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
+						return; // Quân cờ cùng phe (đỏ)
+					}
+					if (nodeEnd.id != "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
+						return; // Quân cờ cùng phe (đen)
+					}
+
+					// Nếu ô đích có quân đối phương, loại bỏ quân đó
+					if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
+						objRemove = { id: nodeEnd.id };
+					}
+				}
+
+				//kết thúc xử lý quân tướng
+
+				// Xử lý cho quân tượng
+				if (id.indexOf('tuong') == 0) { // Assuming 'tuong' is part of the bishop's id
+					var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+					var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+
+					// Kiểm tra xem quân tượng có di chuyển đúng 2 ô chéo không
+					if (!(gapI === 2 && gapJ === 2)) {
+						return;
+					}
+
+					// Kiểm tra đường đi có bị cản không (đường chéo giữa 2 ô)
+					var midI = (nodeEnd.i + nodeStart.i) / 2;
+					var midJ = (nodeEnd.j + nodeStart.j) / 2;
+					if (matrix[midI][midJ].id != "") {
+						return;
+					}
+
+					// Kiểm tra quân tượng có vượt qua sông không (ví dụ sông ở dòng 5)
+					if (id.indexOf('den') >= 0 && nodeEnd.i < 5) { // Quân đen không được qua sông
+						return;
+					}
+					if (id.indexOf('do') >= 0 && nodeEnd.i > 4) { // Quân đỏ không được qua sông
+						return;
+					}
+
+					// Kiểm tra nếu ô đích có quân cờ cùng phe, thì không cho di chuyển
+					if (nodeEnd.id != "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
+						return; // Quân cờ cùng phe (đỏ)
+					}
+					if (nodeEnd.id != "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
+						return; // Quân cờ cùng phe (đen)
+					}
+
+					// Nếu ô đích có quân đối phương, loại bỏ quân đó
+					if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
+						objRemove = { id: nodeEnd.id };
+					}
+				}
+
+
+				// xử lý quân xe Đạt
+				if (id.indexOf('xe') >= 0) {
+					var gapI = Math.abs(nodeEnd.i - nodeStart.i);
+					var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
+
+
+					if (gapI > 0 && gapJ > 0) {
+						return;
+					}
+
+					if (gapI == 0) {
+						if (nodeEnd.j > nodeStart.j) {
+							for (var j = nodeStart.j + 1; j < nodeEnd.j; j++) {
+								if (matrix[nodeStart.i][j].id != "") {
+									return;
+								}
+							}
+						} else {
+							for (var j = nodeStart.j - 1; j > nodeEnd.j; j--) {
+								if (matrix[nodeStart.i][j].id != "") {
+									return;
+								}
+							}
+						}
+					} else if (gapJ == 0) {
+						if (nodeEnd.i > nodeStart.i) {
+							for (var i = nodeStart.i + 1; i < nodeEnd.i; i++) {
+								if (matrix[i][nodeStart.j].id != "") {
+									return;
+								}
+							}
+						} else {
+							for (var i = nodeStart.i - 1; i > nodeEnd.i; i--) {
+								if (matrix[i][nodeStart.j].id != "") {
+									return;
+								}
+							}
+						}
+					}
+
+
+					if (nodeEnd.id != "" && nodeEnd.id.indexOf('do') >= 0) {
+						return;
+					}
+
+					if (nodeEnd.id != "") {
+						objRemove = { id: nodeEnd.id };
+					}
+				}
+				// kết thúc xử lý quân xe Đạt
+
+
+
+				let params = new URL(document.location.toString()).searchParams;
+				let roomId = params.get("roomId");
+				var para = [{ id: id, fromi: nodeStart.i, fromj: nodeStart.j, toi: nodeEnd.i, toj: nodeEnd.j }];
+				if (objRemove != null) {
+					para.push(objRemove);
+				}
+				axios({
+					url: 'api/chess/move-chess-node?roomId=' + roomId,
+					method: 'Post',
+					responseType: 'Json',
+					data: para
+				}).then((response) => {
+
+				});
+
+
+			}
+		},
+		mounted: function () {
+			this.getChessNode();
+			let params = new URL(document.location.toString()).searchParams;
+			let roomId = params.get("roomId");
+			var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub?roomId=" + roomId).build();
+
+			connection.on("ReceiveChessMove", function (message) {
+				console.log(message);
+				var response = JSON.parse(message);
+				matrix[response[0].fromi][response[0].fromj].id = "";
+				var nodeEnd = matrix[response[0].toi][response[0].toj];
+				nodeEnd.id = response[0].id;
+				var obj = document.getElementById(response[0].id);
+				obj.style.top = nodeEnd.top + "px";
+				obj.style.left = nodeEnd.left + "px";
+				if (response.length > 1) {
+					var temp = document.getElementById(response[1].id);
+					temp.style.display = "none";
+				}
+			});
+			connection.start().then(function () {
+
+			}).catch(function (err) {
+				return console.error(err.toString());
+			});
+		}
+	});
+</script>
+
+
+<script>
+
+	// Khởi tạo kết nối SignalR
+	var connection = new signalR.HubConnectionBuilder().withUrl("/chatHub").build();
+
+	// Hàm cuộn xuống cuối danh sách tin nhắn
+	function scrollToBottom() {
+		var messagesList = document.getElementById('messagesList');
+		messagesList.scrollTop = messagesList.scrollHeight;
+	}
+
+
+	// Kết nối đến server qua SignalR
+	connection.start().then(function () {
+		console.log("SignalR connected");
+
+		// Khi nhận tin nhắn từ server
+		connection.on("ReceiveMessage", function (message) {
+			scrollToBottom();
+			
+		});
+
+		// Gửi tin nhắn khi người dùng nhấn "Send Message"
+		document.getElementById('sendButton').addEventListener('click', function () {
+			var message = document.getElementById('messageInput').value.trim();
+
+			if (message === "") {
+				alert("Tin nhắn không được để trống!");
+				return;
+			}
+			// Nếu tin nhắn hợp lệ, gửi qua SignalR
+			connection.invoke("SendMessage", message).catch(function (err) {
+				return console.error(err.toString());
+			});
+
+			document.getElementById('messageInput').value = '';  // Xóa nội dung ô nhập liệu
+		});
+	}).catch(function (err) {
+		return console.error(err.toString());
+	});
+
+</script>
+
+=======
     var matrix = []; 
     var app = new Vue({
         el: '#app',
@@ -556,3 +964,4 @@
         }
     });
 </script>
+
