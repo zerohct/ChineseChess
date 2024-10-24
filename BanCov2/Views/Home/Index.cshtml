@@ -127,30 +127,45 @@
                 // kết thúc quân mã
 
                 //xử lý quân tướng: khánh
-                if (id.indexOf('tuong') >= 0) { // Assuming king's id contains 'tuong'
+                if (id.indexOf('chutuong') >= 0) { 
                     var gapI = Math.abs(nodeEnd.i - nodeStart.i);
                     var gapJ = Math.abs(nodeEnd.j - nodeStart.j);
 
-                    // King can only move one step in any direction (vertically, horizontally, or diagonally)
-                    if (!(gapI <= 1 && gapJ <= 1)) {
-                        return;
+                    // Tướng chỉ có thể di chuyển 1 ô theo bất kỳ hướng nào (ngang hoặc dọc)
+                    if (!(gapI === 1 && gapJ === 0) && !(gapI === 0 && gapJ === 1)) {
+                        return; // Di chuyển không hợp lệ
                     }
 
-                    // Additional logic for the king's palace restriction (optional based on your game rules)
-                    // Example: restricting the king's movement to certain areas of the board.
-                    if (nodeEnd.i < 7 || nodeEnd.j < 3 || nodeEnd.j > 5) { // Assuming this is the palace area for 'do' king
-                        return;
-                    }
-                    // If the target square has a friendly piece, prevent the move
-                    if (nodeEnd.id != "" && nodeEnd.id.indexOf('den') >= 0) {
-                        return;
+                    // Kiểm tra cung cho Tướng đỏ
+                    if (id.indexOf('den') >= 0) {
+                        // Cung của Tướng den (từ hàng 7 đến 9, cột 3 đến 5)
+                        if (nodeEnd.i < 7 || nodeEnd.i > 9 || nodeEnd.j < 3 || nodeEnd.j > 5) {
+                            return; // Di chuyển ngoài cung của Tướng đỏ
+                        }
                     }
 
-                    // If there's an opponent's piece, remove it
-                    if (nodeEnd.id != "") { // Assuming opponent pieces are 'den'
+                    // Kiểm tra cung cho Tướng đen
+                    if (id.indexOf('do') >= 0) {
+                        // Cung của Tướng do (từ hàng 0 đến 2, cột 3 đến 5)
+                        if (nodeEnd.i < 0 || nodeEnd.i > 2 || nodeEnd.j < 3 || nodeEnd.j > 5) {
+                            return; // Di chuyển ngoài cung của Tướng đen
+                        }
+                    }
+
+                    // Kiểm tra nếu ô đích có quân cờ cùng phe, thì không cho di chuyển
+                    if (nodeEnd.id != "" && id.indexOf('do') >= 0 && nodeEnd.id.indexOf('do') >= 0) {
+                        return; // Quân cờ cùng phe (đỏ)
+                    }
+                    if (nodeEnd.id != "" && id.indexOf('den') >= 0 && nodeEnd.id.indexOf('den') >= 0) {
+                        return; // Quân cờ cùng phe (đen)
+                    }
+
+                    // Nếu ô đích có quân đối phương, loại bỏ quân đó
+                    if (nodeEnd.id != "" && ((id.indexOf('do') >= 0 && nodeEnd.id.indexOf('den') >= 0) || (id.indexOf('den') >= 0 && nodeEnd.id.indexOf('do') >= 0))) {
                         objRemove = { id: nodeEnd.id };
                     }
                 }
+
                 //kết thúc xử lý quân tướng
 
                 let params = new URL(document.location.toString()).searchParams;

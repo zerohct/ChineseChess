@@ -11,22 +11,22 @@ namespace Libs.Services
 {
     public class ChessService
     {
-        private ApplicationDbContext dbContext;
+        private readonly ApplicationDbContext _dbContext;
         private RoomRepository roomRepository;
 
         public ChessService(ApplicationDbContext dbContext) { 
-            this.dbContext = dbContext;
+            _dbContext = dbContext;
             this.roomRepository = new RoomRepository(dbContext);
 
         }
         public void Save() { 
-            dbContext.SaveChanges();
+            _dbContext.SaveChanges();
         }
         public List<Room> getRoomList() { 
             return roomRepository.getRoomList();
         }
         public void insertRoom(Room r) {
-            dbContext.Room.Add(r);
+            _dbContext.Room.Add(r);
             Save();
         }
     }

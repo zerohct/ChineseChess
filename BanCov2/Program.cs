@@ -2,20 +2,33 @@ using BanCov2.Hubs;
 using Libs;
 using Libs.Services;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Identity;
 
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddControllersWithViews();
+
 builder.Services.AddSignalR();
 builder.Services.AddTransient<ChessService>();
+
+builder.Services.AddIdentity<IdentityUser, IdentityRole>()
+ .AddDefaultTokenProviders()
+ .AddDefaultUI()
+ .AddEntityFrameworkStores<ApplicationDbContext>();
+
+builder.Services.AddRazorPages();
+
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
 {
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection"));
     //options.UseQueryTrackingBehavior(QueryTrackingBehavior.NoTracking);
 
 }, ServiceLifetime.Transient);
+
+
+
 
 var app = builder.Build();
 
@@ -33,6 +46,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthorization();
+app.MapRazorPages();
 app.MapHub<ChatHub>("/chatHub");
 app.MapControllerRoute(
     name: "default",
