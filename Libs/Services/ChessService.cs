@@ -11,7 +11,7 @@ namespace Libs.Services
 {
     public class ChessService
     {
-        private readonly ApplicationDbContext _dbContext;
+        private readonly ApplicationDbContext dbContext;
         private RoomRepository roomRepository;
 
         public ChessService(ApplicationDbContext dbContext)
